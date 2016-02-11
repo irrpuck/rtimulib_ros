@@ -109,7 +109,7 @@ int main(int argc, char **argv)
     double angular_velocity_std_dev_;
     if (!private_n.getParam("angular_velocity_std_dev", angular_velocity_std_dev_))
     {
-        angular_velocity_std_dev_ = 0.05 * (M_PI / 180.0);
+        angular_velocity_std_dev_ = 0.5 * (M_PI / 180.0);
     }
 
     double linear_acceleration_std_dev_;
@@ -191,7 +191,7 @@ int main(int argc, char **argv)
         if (imu->IMURead())
         {
             RTIMU_DATA imu_data = imu->getIMUData();
-            imu_msg.header.stamp = ros::Time::now();
+            imu_msg.header.stamp = ros::Time::now(); // - ros::Duration(0.9);
             //imu_msg.orientation.x = q2.getX();
             //imu_msg.orientation.y = q2.getY();
             //imu_msg.orientation.z = q2.getZ();
