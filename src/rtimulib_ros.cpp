@@ -27,6 +27,8 @@
 #include <RTIMULib.h>
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
+#include <tf/tf.h>
+#include <math.h>
 
 int main(int argc, char **argv)
 {
@@ -68,6 +70,14 @@ int main(int argc, char **argv)
         ROS_WARN("No update_rate provided - default: 20 Hz");
         update_rate = 20;
     }
+    double angular_velocity_std_dev_ = 0.05 * (M_PI / 180.0);
+    double linear_acceleration_std_dev_ = (400 / 1000000.0) * 9.807;
+    double pitch_roll_std_dev_ = 1.0 * (M_PI / 180.0);
+    double yaw_std_dev_ = 5.0 * (M_PI / 180.0);
+    double angular_velocity_covariance = angular_velocity_std_dev_ * angular_velocity_std_dev_;
+    double linear_acceleration_covariance = linear_acceleration_std_dev_ * linear_acceleration_std_dev_;
+    double pitch_roll_covariance = pitch_roll_std_dev_ * pitch_roll_std_dev_;
+    double yaw_covariance = yaw_std_dev_ * yaw_std_dev_;
 
     ros::Publisher imu_pub = n.advertise<sensor_msgs::Imu>(topic_name.c_str(), 1);
 
@@ -100,18 +110,34 @@ int main(int argc, char **argv)
         if (imu->IMURead())
         {
             RTIMU_DATA imu_data = imu->getIMUData();
+            tf::Quaternion ned_to_enu = tf::createQuaternionFromRPY(M_PI, 0.0, 0.0);
+            tf::Quaternion q1 = tf::Quaternion(imu_data.fusionQPose.x(), imu_data.fusionQPose.y(),
+                                                  imu_data.fusionQPose.z(), imu_data.fusionQPose.scalar());
+            tf::Quaternion q2 = ned_to_enu * q1;
             imu_msg.header.stamp = ros::Time::now();
             imu_msg.header.frame_id = frame_id;
-            imu_msg.orientation.x = imu_data.fusionQPose.x(); 
-            imu_msg.orientation.y = imu_data.fusionQPose.y(); 
-            imu_msg.orientation.z = imu_data.fusionQPose.z(); 
-            imu_msg.orientation.w = imu_data.fusionQPose.scalar(); 
+            imu_msg.orientation.x = q2.getX();
+            imu_msg.orientation.y = q2.getY();
+            imu_msg.orientation.z = q2.getZ();
+            imu_msg.orientation.w = q2.getW();
             imu_msg.angular_velocity.x = imu_data.gyro.x();
             imu_msg.angular_velocity.y = imu_data.gyro.y();
             imu_msg.angular_velocity.z = imu_data.gyro.z();
             imu_msg.linear_acceleration.x = imu_data.accel.x();
             imu_msg.linear_acceleration.y = imu_data.accel.y();
             imu_msg.linear_acceleration.z = imu_data.accel.z();
+            imu_msg.linear_acceleration_covariance[0] = linear_acceleration_covariance;
+	    imu_msg.linear_acceleration_covariance[4] = linear_acceleration_covariance;
+	    imu_msg.linear_acceleration_covariance[8] = linear_acceleration_covariance;
+
+	    imu_msg.angular_velocity_covariance[0] = angular_velocity_covariance;
+	    imu_msg.angular_velocity_covariance[4] = angular_velocity_covariance;
+	    imu_msg.angular_velocity_covariance[8] = angular_velocity_covariance;
+    
+	    imu_msg.orientation_covariance[0] = pitch_roll_covariance;
+	    imu_msg.orientation_covariance[4] = pitch_roll_covariance;
+	    imu_msg.orientation_covariance[8] = yaw_covariance;
+
 
             imu_pub.publish(imu_msg);
         }
