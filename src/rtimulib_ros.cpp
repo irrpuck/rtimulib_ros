@@ -73,7 +73,7 @@ int main(int argc, char **argv)
     double angular_velocity_std_dev_ = 0.05 * (M_PI / 180.0);
     double linear_acceleration_std_dev_ = (400 / 1000000.0) * 9.807;
     double pitch_roll_std_dev_ = 1.0 * (M_PI / 180.0);
-    double yaw_std_dev_ = 5.0 * (M_PI / 180.0);
+    double yaw_std_dev_ = 0.5 * (M_PI / 180.0);
     double angular_velocity_covariance = angular_velocity_std_dev_ * angular_velocity_std_dev_;
     double linear_acceleration_covariance = linear_acceleration_std_dev_ * linear_acceleration_std_dev_;
     double pitch_roll_covariance = pitch_roll_std_dev_ * pitch_roll_std_dev_;
