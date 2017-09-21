@@ -70,7 +70,7 @@ int main(int argc, char **argv)
         ROS_WARN("No update_rate provided - default: 20 Hz");
         update_rate = 20;
     }
-    double angular_velocity_std_dev_ = 0.05 * (M_PI / 180.0);
+    double angular_velocity_std_dev_ = 1.0 * (M_PI / 180.0);
     double linear_acceleration_std_dev_ = (400 / 1000000.0) * 9.807;
     double pitch_roll_std_dev_ = 1.0 * (M_PI / 180.0);
     double yaw_std_dev_ = 0.5 * (M_PI / 180.0);
