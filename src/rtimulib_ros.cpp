@@ -27,6 +27,7 @@
 #include <RTIMULib.h>
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
+#include <sensor_msgs/MagneticField.h>
 #include <tf/tf.h>
 #include <math.h>
 
@@ -37,11 +38,18 @@ int main(int argc, char **argv)
     ros::NodeHandle n;
     ros::NodeHandle private_n("~");
 
-    std::string topic_name;
-    if(!private_n.getParam("topic_name", topic_name))
+    std::string imu_topic_name;
+    std::string mag_topic_name;
+    if(!private_n.getParam("imu_topic_name", imu_topic_name))
     {
-        ROS_WARN("No topic_name provided - default: imu/data");
-        topic_name = "imu/data";
+        ROS_WARN("No imu_topic_name provided - default: imu/data");
+        imu_topic_name = "imu/data";
+    }
+
+    if(!private_n.getParam("mag_topic_name", mag_topic_name))
+    {
+        ROS_WARN("No mag_topic_name provided - default: imu/mag");
+        mag_topic_name = "imu/mag"; 
     }
 
     std::string calibration_file_path;
@@ -70,16 +78,17 @@ int main(int argc, char **argv)
         ROS_WARN("No update_rate provided - default: 20 Hz");
         update_rate = 20;
     }
-    double angular_velocity_std_dev_ = 1.0 * (M_PI / 180.0);
+    double angular_velocity_std_dev_ = 0.05 * (M_PI / 180.0);
     double linear_acceleration_std_dev_ = (400 / 1000000.0) * 9.807;
     double pitch_roll_std_dev_ = 1.0 * (M_PI / 180.0);
-    double yaw_std_dev_ = 0.5 * (M_PI / 180.0);
+    double yaw_std_dev_ = 5.0 * (M_PI / 180.0);
     double angular_velocity_covariance = angular_velocity_std_dev_ * angular_velocity_std_dev_;
     double linear_acceleration_covariance = linear_acceleration_std_dev_ * linear_acceleration_std_dev_;
     double pitch_roll_covariance = pitch_roll_std_dev_ * pitch_roll_std_dev_;
     double yaw_covariance = yaw_std_dev_ * yaw_std_dev_;
 
-    ros::Publisher imu_pub = n.advertise<sensor_msgs::Imu>(topic_name.c_str(), 1);
+    ros::Publisher imu_pub = n.advertise<sensor_msgs::Imu>(imu_topic_name.c_str(), 1);
+    ros::Publisher mag_pub = n.advertise<sensor_msgs::MagneticField>(mag_topic_name.c_str(), 1);
 
     // Load the RTIMULib.ini config file
     RTIMUSettings *settings = new RTIMUSettings(calibration_file_path.c_str(), calibration_file_name.c_str()); 
@@ -106,20 +115,21 @@ int main(int argc, char **argv)
     while (ros::ok())
     {
         sensor_msgs::Imu imu_msg;
+        sensor_msgs::MagneticField mag_msg;
 
         if (imu->IMURead())
         {
             RTIMU_DATA imu_data = imu->getIMUData();
-            tf::Quaternion ned_to_enu = tf::createQuaternionFromRPY(M_PI, 0.0, 0.0);
-            tf::Quaternion q1 = tf::Quaternion(imu_data.fusionQPose.x(), imu_data.fusionQPose.y(),
-                                                  imu_data.fusionQPose.z(), imu_data.fusionQPose.scalar());
-            tf::Quaternion q2 = ned_to_enu * q1;
+            //tf::Quaternion ned_to_enu = tf::createQuaternionFromRPY(M_PI, 0.0, 0.0);
+            //tf::Quaternion q1 = tf::Quaternion(imu_data.fusionQPose.x(), imu_data.fusionQPose.y(),
+            //                                      imu_data.fusionQPose.z(), imu_data.fusionQPose.scalar());
+            //tf::Quaternion q2 = ned_to_enu * q1;
             imu_msg.header.stamp = ros::Time::now();
             imu_msg.header.frame_id = frame_id;
-            imu_msg.orientation.x = q2.getX();
-            imu_msg.orientation.y = q2.getY();
-            imu_msg.orientation.z = q2.getZ();
-            imu_msg.orientation.w = q2.getW();
+            //imu_msg.orientation.x = q2.getX();
+            //imu_msg.orientation.y = q2.getY();
+            //imu_msg.orientation.z = q2.getZ();
+            //imu_msg.orientation.w = q2.getW();
             imu_msg.angular_velocity.x = imu_data.gyro.x();
             imu_msg.angular_velocity.y = imu_data.gyro.y();
             imu_msg.angular_velocity.z = imu_data.gyro.z();
@@ -140,6 +150,16 @@ int main(int argc, char **argv)
 
 
             imu_pub.publish(imu_msg);
+
+            mag_msg.header = imu_msg.header;
+            mag_msg.magnetic_field.x = imu_data.compass.x();
+            mag_msg.magnetic_field.y = imu_data.compass.y();
+            mag_msg.magnetic_field.z = imu_data.compass.z();
+            mag_msg.magnetic_field_covariance[0] = pitch_roll_covariance;
+            mag_msg.magnetic_field_covariance[4] = pitch_roll_covariance;
+            mag_msg.magnetic_field_covariance[8] = yaw_covariance;
+            mag_pub.publish(mag_msg);
+
         }
         ros::spinOnce();
         loop_rate.sleep();
