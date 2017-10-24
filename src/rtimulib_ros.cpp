@@ -130,9 +130,9 @@ int main(int argc, char **argv)
             //imu_msg.orientation.y = q2.getY();
             //imu_msg.orientation.z = q2.getZ();
             //imu_msg.orientation.w = q2.getW();
-            imu_msg.angular_velocity.x = imu_data.gyro.x();
-            imu_msg.angular_velocity.y = imu_data.gyro.y();
-            imu_msg.angular_velocity.z = imu_data.gyro.z();
+            imu_msg.angular_velocity.x = -imu_data.gyro.x();
+            imu_msg.angular_velocity.y = -imu_data.gyro.y();
+            imu_msg.angular_velocity.z = -imu_data.gyro.z();
             imu_msg.linear_acceleration.x = imu_data.accel.x();
             imu_msg.linear_acceleration.y = imu_data.accel.y();
             imu_msg.linear_acceleration.z = imu_data.accel.z();
@@ -152,9 +152,9 @@ int main(int argc, char **argv)
             imu_pub.publish(imu_msg);
 
             mag_msg.header = imu_msg.header;
-            mag_msg.magnetic_field.x = imu_data.compass.x();
-            mag_msg.magnetic_field.y = imu_data.compass.y();
-            mag_msg.magnetic_field.z = imu_data.compass.z();
+            mag_msg.magnetic_field.x = -imu_data.compass.x();
+            mag_msg.magnetic_field.y = -imu_data.compass.y();
+            mag_msg.magnetic_field.z = -imu_data.compass.z();
             mag_msg.magnetic_field_covariance[0] = pitch_roll_covariance;
             mag_msg.magnetic_field_covariance[4] = pitch_roll_covariance;
             mag_msg.magnetic_field_covariance[8] = yaw_covariance;
