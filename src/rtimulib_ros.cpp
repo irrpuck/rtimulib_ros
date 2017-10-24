@@ -140,7 +140,7 @@ int main(int argc, char **argv)
 
     diagnostic_updater::Updater diagnostic_;
     diagnostic_.setHardwareID(hardware_id);
-    diagnostic_updater::HeaderlessTopicDiagnostic freq_diag_("topic1", diagnostic_,
+    diagnostic_updater::HeaderlessTopicDiagnostic freq_diag_("IMU", diagnostic_,
                                                              diagnostic_updater::FrequencyStatusParam(&update_rate,
                                                                                                       &update_rate));
     diagnostic_.add("IMU Status", updateDiagnostics);
