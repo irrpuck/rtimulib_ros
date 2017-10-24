@@ -4,11 +4,12 @@ project(rtimulib_ros)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   sensor_msgs
+  diagnostic_updater
 )
 
 catkin_package(
     LIBRARIES rtimulib_ros
-    CATKIN_DEPENDS roscpp sensor_msgs
+    CATKIN_DEPENDS roscpp sensor_msgs diagnostic_updater
 )
 
 include_directories(

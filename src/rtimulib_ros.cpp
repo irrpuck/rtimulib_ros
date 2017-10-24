@@ -29,59 +29,103 @@
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/MagneticField.h>
 #include <tf/tf.h>
+#include "diagnostic_msgs/DiagnosticStatus.h"
+#include "diagnostic_updater/diagnostic_updater.h"
+#include <diagnostic_updater/publisher.h>
 #include <math.h>
+
+bool running;
+std::string port;
+std::string frame_id;
+std::string imu_topic_name;
+std::string mag_topic_name;
+long read_errors_;
+
+void updateDiagnostics(diagnostic_updater::DiagnosticStatusWrapper &stat)
+{
+    if (!running)
+        stat.summary(diagnostic_msgs::DiagnosticStatus::ERROR, "IMU is stopped");
+    else
+        stat.summary(diagnostic_msgs::DiagnosticStatus::OK, "IMU is running");
+
+    stat.add("Device", port);
+    stat.add("TF Frame", frame_id);
+    stat.add("IMU Topic", imu_topic_name);
+    stat.add("Magnetometer Topic", mag_topic_name);
+    stat.add("Read Errors", read_errors_);
+}
+
 
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "rtimulib_node");
-    ROS_INFO("Imu driver is now running");
+
     ros::NodeHandle n;
     ros::NodeHandle private_n("~");
+    running = false;
 
-    std::string imu_topic_name;
-    std::string mag_topic_name;
-    if(!private_n.getParam("imu_topic_name", imu_topic_name))
+    if (!private_n.getParam("imu_topic_name", imu_topic_name))
     {
         ROS_WARN("No imu_topic_name provided - default: imu/data");
         imu_topic_name = "imu/data";
     }
 
-    if(!private_n.getParam("mag_topic_name", mag_topic_name))
+    if (!private_n.getParam("mag_topic_name", mag_topic_name))
     {
         ROS_WARN("No mag_topic_name provided - default: imu/mag");
-        mag_topic_name = "imu/mag"; 
+        mag_topic_name = "imu/mag";
     }
 
     std::string calibration_file_path;
-    if(!private_n.getParam("calibration_file_path", calibration_file_path))
+    if (!private_n.getParam("calibration_file_path", calibration_file_path))
     {
         ROS_ERROR("The calibration_file_path parameter must be set to use a calibration file.");
     }
 
     std::string calibration_file_name;
-    if(!private_n.getParam("calibration_file_name", calibration_file_name))
+    if (!private_n.getParam("calibration_file_name", calibration_file_name))
     {
         ROS_WARN("No calibration_file_name provided - default: RTIMULib.ini");
         calibration_file_name = "RTIMULib";
     }
 
-    std::string frame_id;
-    if(!private_n.getParam("frame_id", frame_id))
+    if (!private_n.getParam("frame_id", frame_id))
     {
         ROS_WARN("No frame_id provided - default: imu_link");
         frame_id = "imu_link";
     }
 
     double update_rate;
-    if(!private_n.getParam("update_rate", update_rate))
+    if (!private_n.getParam("update_rate", update_rate))
     {
         ROS_WARN("No update_rate provided - default: 20 Hz");
         update_rate = 20;
     }
-    double angular_velocity_std_dev_ = 0.05 * (M_PI / 180.0);
-    double linear_acceleration_std_dev_ = (400 / 1000000.0) * 9.807;
-    double pitch_roll_std_dev_ = 1.0 * (M_PI / 180.0);
-    double yaw_std_dev_ = 5.0 * (M_PI / 180.0);
+
+    double angular_velocity_std_dev_;
+    if (!private_n.getParam("angular_velocity_std_dev", angular_velocity_std_dev_))
+    {
+        angular_velocity_std_dev_ = 0.05 * (M_PI / 180.0);
+    }
+
+    double linear_acceleration_std_dev_;
+    if (!private_n.getParam("linear_acceleration_std_dev", linear_acceleration_std_dev_))
+    {
+        linear_acceleration_std_dev_ = (400 / 1000000.0) * 9.807;
+    }
+
+    double pitch_roll_std_dev_;
+    if (!private_n.getParam("pitch_roll_std_dev", pitch_roll_std_dev_))
+    {
+        pitch_roll_std_dev_ = 1.0 * (M_PI / 180.0);
+    }
+
+    double yaw_std_dev_;
+    if (!private_n.getParam("yaw_std_dev", yaw_std_dev_))
+    {
+        pitch_roll_std_dev_ = 5.0 * (M_PI / 180.0);
+    }
+
     double angular_velocity_covariance = angular_velocity_std_dev_ * angular_velocity_std_dev_;
     double linear_acceleration_covariance = linear_acceleration_std_dev_ * linear_acceleration_std_dev_;
     double pitch_roll_covariance = pitch_roll_std_dev_ * pitch_roll_std_dev_;
@@ -90,8 +134,14 @@ int main(int argc, char **argv)
     ros::Publisher imu_pub = n.advertise<sensor_msgs::Imu>(imu_topic_name.c_str(), 1);
     ros::Publisher mag_pub = n.advertise<sensor_msgs::MagneticField>(mag_topic_name.c_str(), 1);
 
+    diagnostic_updater::Updater diagnostic_;
+    diagnostic_updater::HeaderlessTopicDiagnostic freq_diag_("topic1", diagnostic_,
+                                                             diagnostic_updater::FrequencyStatusParam(&update_rate,
+                                                                                                      &update_rate));
+    diagnostic_.add("IMU Status", updateDiagnostics);
+
     // Load the RTIMULib.ini config file
-    RTIMUSettings *settings = new RTIMUSettings(calibration_file_path.c_str(), calibration_file_name.c_str()); 
+    RTIMUSettings *settings = new RTIMUSettings(calibration_file_path.c_str(), calibration_file_name.c_str());
 
     RTIMU *imu = RTIMU::createIMU(settings);
 
@@ -111,21 +161,32 @@ int main(int argc, char **argv)
     imu->setAccelEnable(true);
     imu->setCompassEnable(true);
 
+    ROS_INFO("Imu driver is now running");
+    running = true;
+    sensor_msgs::Imu imu_msg;
+    sensor_msgs::MagneticField mag_msg;
+
+    imu_msg.header.frame_id = frame_id;
+    imu_msg.linear_acceleration_covariance[0] = linear_acceleration_covariance;
+    imu_msg.linear_acceleration_covariance[4] = linear_acceleration_covariance;
+    imu_msg.linear_acceleration_covariance[8] = linear_acceleration_covariance;
+    imu_msg.angular_velocity_covariance[0] = angular_velocity_covariance;
+    imu_msg.angular_velocity_covariance[4] = angular_velocity_covariance;
+    imu_msg.angular_velocity_covariance[8] = angular_velocity_covariance;
+
+    mag_msg.header.frame_id = frame_id;
+    mag_msg.magnetic_field_covariance[0] = pitch_roll_covariance;
+    mag_msg.magnetic_field_covariance[4] = pitch_roll_covariance;
+    mag_msg.magnetic_field_covariance[8] = yaw_covariance;
+
     ros::Rate loop_rate(update_rate);
     while (ros::ok())
     {
-        sensor_msgs::Imu imu_msg;
-        sensor_msgs::MagneticField mag_msg;
-
+        ros::spinOnce();
         if (imu->IMURead())
         {
             RTIMU_DATA imu_data = imu->getIMUData();
-            //tf::Quaternion ned_to_enu = tf::createQuaternionFromRPY(M_PI, 0.0, 0.0);
-            //tf::Quaternion q1 = tf::Quaternion(imu_data.fusionQPose.x(), imu_data.fusionQPose.y(),
-            //                                      imu_data.fusionQPose.z(), imu_data.fusionQPose.scalar());
-            //tf::Quaternion q2 = ned_to_enu * q1;
             imu_msg.header.stamp = ros::Time::now();
-            imu_msg.header.frame_id = frame_id;
             //imu_msg.orientation.x = q2.getX();
             //imu_msg.orientation.y = q2.getY();
             //imu_msg.orientation.z = q2.getZ();
@@ -136,32 +197,19 @@ int main(int argc, char **argv)
             imu_msg.linear_acceleration.x = imu_data.accel.x();
             imu_msg.linear_acceleration.y = imu_data.accel.y();
             imu_msg.linear_acceleration.z = imu_data.accel.z();
-            imu_msg.linear_acceleration_covariance[0] = linear_acceleration_covariance;
-	    imu_msg.linear_acceleration_covariance[4] = linear_acceleration_covariance;
-	    imu_msg.linear_acceleration_covariance[8] = linear_acceleration_covariance;
-
-	    imu_msg.angular_velocity_covariance[0] = angular_velocity_covariance;
-	    imu_msg.angular_velocity_covariance[4] = angular_velocity_covariance;
-	    imu_msg.angular_velocity_covariance[8] = angular_velocity_covariance;
-    
-	    imu_msg.orientation_covariance[0] = pitch_roll_covariance;
-	    imu_msg.orientation_covariance[4] = pitch_roll_covariance;
-	    imu_msg.orientation_covariance[8] = yaw_covariance;
-
-
             imu_pub.publish(imu_msg);
-
-            mag_msg.header = imu_msg.header;
+            mag_msg.header.stamp = imu_msg.header.stamp;
             mag_msg.magnetic_field.x = -imu_data.compass.x();
             mag_msg.magnetic_field.y = -imu_data.compass.y();
             mag_msg.magnetic_field.z = -imu_data.compass.z();
-            mag_msg.magnetic_field_covariance[0] = pitch_roll_covariance;
-            mag_msg.magnetic_field_covariance[4] = pitch_roll_covariance;
-            mag_msg.magnetic_field_covariance[8] = yaw_covariance;
             mag_pub.publish(mag_msg);
-
+            freq_diag_.tick();
         }
-        ros::spinOnce();
+        else
+        {
+            read_errors_++;
+        }
+        diagnostic_.update();
         loop_rate.sleep();
     }
     return 0;
