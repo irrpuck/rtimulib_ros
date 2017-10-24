@@ -35,7 +35,6 @@
 #include <math.h>
 
 bool running;
-std::string port;
 std::string frame_id;
 std::string imu_topic_name;
 std::string mag_topic_name;
@@ -48,7 +47,6 @@ void updateDiagnostics(diagnostic_updater::DiagnosticStatusWrapper &stat)
     else
         stat.summary(diagnostic_msgs::DiagnosticStatus::OK, "IMU is running");
 
-    stat.add("Device", port);
     stat.add("TF Frame", frame_id);
     stat.add("IMU Topic", imu_topic_name);
     stat.add("Magnetometer Topic", mag_topic_name);
@@ -63,6 +61,12 @@ int main(int argc, char **argv)
     ros::NodeHandle n;
     ros::NodeHandle private_n("~");
     running = false;
+
+    std::string hardware_id;
+    if (!private_n.getParam("hardware_id", hardware_id))
+    {
+        hardware_id = "imu0";
+    }
 
     if (!private_n.getParam("imu_topic_name", imu_topic_name))
     {
@@ -135,6 +139,7 @@ int main(int argc, char **argv)
     ros::Publisher mag_pub = n.advertise<sensor_msgs::MagneticField>(mag_topic_name.c_str(), 1);
 
     diagnostic_updater::Updater diagnostic_;
+    diagnostic_.setHardwareID(hardware_id);
     diagnostic_updater::HeaderlessTopicDiagnostic freq_diag_("topic1", diagnostic_,
                                                              diagnostic_updater::FrequencyStatusParam(&update_rate,
                                                                                                       &update_rate));
